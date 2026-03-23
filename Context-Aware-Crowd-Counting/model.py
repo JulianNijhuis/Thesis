@@ -23,7 +23,17 @@ class ContextualModule(nn.Module):
 
     def forward(self, feats):
         h, w = feats.size(2), feats.size(3)
-        multi_scales = [F.interpolate(input=stage(feats), size=(h, w), mode='bilinear', align_corners=False) for stage in self.scales]
+        
+        multi_scales = []
+        for stage in self.scales:
+            if feats.device.type == 'mps':
+                stage.to('cpu') # Temporarily move module to CPU
+                stage_out = stage(feats.cpu()).to(feats.device) # Compute on CPU, move result back
+                stage.to(feats.device) # Move module back to GPU
+            else:
+                stage_out = stage(feats)
+            multi_scales.append(F.interpolate(input=stage_out, size=(h, w), mode='bilinear', align_corners=False))
+            
         weights = [self.__make_weight(feats,scale_feature) for scale_feature in multi_scales]
         overall_features = [(multi_scales[0]*weights[0]+multi_scales[1]*weights[1]+multi_scales[2]*weights[2]+multi_scales[3]*weights[3])/(weights[0]+weights[1]+weights[2]+weights[3])]+ [feats]
         bottle = self.bottleneck(torch.cat(overall_features, 1))
