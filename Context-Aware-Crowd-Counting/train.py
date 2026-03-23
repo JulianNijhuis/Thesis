@@ -19,12 +19,16 @@ import cv2
 import dataset
 import time
 
+device = torch.device("mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
+
 parser = argparse.ArgumentParser(description='PyTorch CANNet')
 
 parser.add_argument('train_json', metavar='TRAIN',
                     help='path to train json')
 parser.add_argument('val_json', metavar='VAL',
                     help='path to val json')
+parser.add_argument('--batch_size', type=int, default=4,
+                    help='batch size for training')
 
 def main():
 
@@ -34,7 +38,6 @@ def main():
 
     args = parser.parse_args()
     args.lr = 1e-4
-    args.batch_size    = 26
     args.decay         = 5*1e-4
     args.start_epoch   = 0
     args.epochs = 1000
@@ -46,13 +49,14 @@ def main():
     with open(args.val_json, 'r') as outfile:
         val_list = json.load(outfile)
 
-    torch.cuda.manual_seed(args.seed)
+    torch.manual_seed(args.seed)
+    print(f"Training on device: {device}")
 
     model = CANNet()
 
-    model = model.cuda()
+    model = model.to(device)
 
-    criterion = nn.MSELoss(reduction='sum').cuda()
+    criterion = nn.MSELoss(reduction='sum').to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr,
                                     weight_decay=args.decay)
@@ -95,10 +99,10 @@ def train(train_list, model, criterion, optimizer, epoch):
     for i,(img, target)in enumerate(train_loader):
         data_time.update(time.time() - end)
 
-        img = img.cuda()
+        img = img.to(device)
         output = model(img)[:,0,:,:]
 
-        target = target.type(torch.FloatTensor).cuda()
+        target = target.type(torch.FloatTensor).to(device)
 
         loss = criterion(output, target)
 
@@ -138,10 +142,10 @@ def validate(val_list, model, criterion):
         h,w = img.shape[2:4]
         h_d = h//2
         w_d = w//2
-        img_1 = img[:,:,:h_d,:w_d].cuda()
-        img_2 = img[:,:,:h_d,w_d:].cuda()
-        img_3 = img[:,:,h_d:,:w_d].cuda()
-        img_4 = img[:,:,h_d:,w_d:].cuda()
+        img_1 = img[:,:,:h_d,:w_d].to(device)
+        img_2 = img[:,:,:h_d,w_d:].to(device)
+        img_3 = img[:,:,h_d:,:w_d].to(device)
+        img_4 = img[:,:,h_d:,w_d:].to(device)
         density_1 = model(img_1).data.cpu().numpy()
         density_2 = model(img_2).data.cpu().numpy()
         density_3 = model(img_3).data.cpu().numpy()
