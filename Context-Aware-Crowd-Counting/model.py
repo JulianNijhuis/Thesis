@@ -14,7 +14,7 @@ class ContextualModule(nn.Module):
 
     def __make_weight(self,feature,scale_feature):
         weight_feature = feature - scale_feature
-        return F.sigmoid(self.weight_net(weight_feature))
+        return torch.sigmoid(self.weight_net(weight_feature))
 
     def _make_scale(self, features, size):
         prior = nn.AdaptiveAvgPool2d(output_size=(size, size))
@@ -23,7 +23,7 @@ class ContextualModule(nn.Module):
 
     def forward(self, feats):
         h, w = feats.size(2), feats.size(3)
-        multi_scales = [F.upsample(input=stage(feats), size=(h, w), mode='bilinear') for stage in self.scales]
+        multi_scales = [F.interpolate(input=stage(feats), size=(h, w), mode='bilinear', align_corners=False) for stage in self.scales]
         weights = [self.__make_weight(feats,scale_feature) for scale_feature in multi_scales]
         overall_features = [(multi_scales[0]*weights[0]+multi_scales[1]*weights[1]+multi_scales[2]*weights[2]+multi_scales[3]*weights[3])/(weights[0]+weights[1]+weights[2]+weights[3])]+ [feats]
         bottle = self.bottleneck(torch.cat(overall_features, 1))
@@ -40,10 +40,12 @@ class CANNet(nn.Module):
         self.backend = make_layers(self.backend_feat,in_channels = 512,batch_norm=True, dilation = True)
         self.output_layer = nn.Conv2d(64, 1, kernel_size=1)
         if not load_weights:
-            mod = models.vgg16(pretrained = True)
+            mod = models.vgg16(weights=models.VGG16_Weights.DEFAULT)
             self._initialize_weights()
-            for i in xrange(len(self.frontend.state_dict().items())):
-                self.frontend.state_dict().items()[i][1].data[:] = mod.state_dict().items()[i][1].data[:]
+            fsd = list(self.frontend.state_dict().items())
+            msd = list(mod.state_dict().items())
+            for i in range(len(fsd)):
+                fsd[i][1].data[:] = msd[i][1].data[:]
 
     def forward(self,x):
         x = self.frontend(x)

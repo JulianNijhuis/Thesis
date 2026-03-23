@@ -9,7 +9,7 @@ from utils import save_checkpoint
 
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
+
 from torchvision import datasets, transforms
 
 import numpy as np
@@ -52,7 +52,7 @@ def main():
 
     model = model.cuda()
 
-    criterion = nn.MSELoss(size_average=False).cuda()
+    criterion = nn.MSELoss(reduction='sum').cuda()
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr,
                                     weight_decay=args.decay)
@@ -96,11 +96,9 @@ def train(train_list, model, criterion, optimizer, epoch):
         data_time.update(time.time() - end)
 
         img = img.cuda()
-        img = Variable(img)
         output = model(img)[:,0,:,:]
 
         target = target.type(torch.FloatTensor).cuda()
-        target = Variable(target)
 
         loss = criterion(output, target)
 
@@ -138,12 +136,12 @@ def validate(val_list, model, criterion):
 
     for i,(img, target) in enumerate(val_loader):
         h,w = img.shape[2:4]
-        h_d = h/2
-        w_d = w/2
-        img_1 = Variable(img[:,:,:h_d,:w_d].cuda())
-        img_2 = Variable(img[:,:,:h_d,w_d:].cuda())
-        img_3 = Variable(img[:,:,h_d:,:w_d].cuda())
-        img_4 = Variable(img[:,:,h_d:,w_d:].cuda())
+        h_d = h//2
+        w_d = w//2
+        img_1 = img[:,:,:h_d,:w_d].cuda()
+        img_2 = img[:,:,:h_d,w_d:].cuda()
+        img_3 = img[:,:,h_d:,:w_d].cuda()
+        img_4 = img[:,:,h_d:,w_d:].cuda()
         density_1 = model(img_1).data.cpu().numpy()
         density_2 = model(img_2).data.cpu().numpy()
         density_3 = model(img_3).data.cpu().numpy()

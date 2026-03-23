@@ -5,7 +5,7 @@ import numpy as np
 import os
 import glob
 from matplotlib import pyplot as plt
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from matplotlib import cm as CM
 from image import *
 
@@ -23,7 +23,7 @@ for path in path_sets:
         img_paths.append(img_path)
 
 for  img_path  in img_paths:
-    print img_path
+    print(img_path)
     mat = io.loadmat(img_path.replace('.jpg','.mat').replace('images','ground_truth').replace('IMG_','GT_IMG_'))
     img= plt.imread(img_path)
     k = np.zeros((img.shape[0],img.shape[1]))
