@@ -3,6 +3,33 @@ import torch
 from torch.nn import functional as F
 from torchvision import models
 
+class GradientReversalLayer(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, alpha):
+        ctx.alpha = alpha
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        output = grad_output.neg() * ctx.alpha
+        return output, None
+
+class DomainClassifier(nn.Module):
+    def __init__(self, in_channels, num_domains=12):
+        super(DomainClassifier, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, 256, kernel_size=1)
+        self.relu = nn.ReLU(inplace=True)
+        self.gap = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(256, num_domains)
+
+    def forward(self, x, alpha):
+        x = GradientReversalLayer.apply(x, alpha)
+        x = self.relu(self.conv1(x))
+        x = self.gap(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
+
 class ContextualModule(nn.Module):
     def __init__(self, features, out_features=512, sizes=(1, 2, 3, 6)):
         super(ContextualModule, self).__init__()
@@ -27,17 +54,18 @@ class ContextualModule(nn.Module):
         multi_scales = []
         for stage in self.scales:
             if feats.device.type == 'mps':
-                stage.to('cpu') # Temporarily move module to CPU
-                stage_out = stage(feats.cpu()).to(feats.device) # Compute on CPU, move result back
-                stage.to(feats.device) # Move module back to GPU
+                # stage[0] is AdaptiveAvgPool2d (no weights), stage[1] is Conv2d (has weights)
+                pooled = stage[0](feats.cpu()).to(feats.device)
+                stage_out = stage[1](pooled)
             else:
                 stage_out = stage(feats)
             multi_scales.append(F.interpolate(input=stage_out, size=(h, w), mode='bilinear', align_corners=False))
             
         weights = [self.__make_weight(feats,scale_feature) for scale_feature in multi_scales]
-        overall_features = [(multi_scales[0]*weights[0]+multi_scales[1]*weights[1]+multi_scales[2]*weights[2]+multi_scales[3]*weights[3])/(weights[0]+weights[1]+weights[2]+weights[3])]+ [feats]
+        aggregated_feats = (multi_scales[0]*weights[0]+multi_scales[1]*weights[1]+multi_scales[2]*weights[2]+multi_scales[3]*weights[3])/(weights[0]+weights[1]+weights[2]+weights[3])
+        overall_features = [aggregated_feats, feats]
         bottle = self.bottleneck(torch.cat(overall_features, 1))
-        return self.relu(bottle)
+        return self.relu(bottle), aggregated_feats
 
 class CANNet(nn.Module):
     def __init__(self, load_weights=False):
@@ -59,8 +87,8 @@ class CANNet(nn.Module):
 
     def forward(self,x):
         x = self.frontend(x)
-        x = self.context(x)
-        x = self.backend(x)
+        bottle, _ = self.context(x)
+        x = self.backend(bottle)
         x = self.output_layer(x)
         return x
 
@@ -73,6 +101,46 @@ class CANNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
+
+class CANNet_GRL_Frontend(CANNet):
+    def __init__(self, load_weights=False, num_domains=12):
+        super(CANNet_GRL_Frontend, self).__init__(load_weights)
+        self.domain_classifier = DomainClassifier(in_channels=512, num_domains=num_domains)
+
+    def forward(self, x, alpha=1.0):
+        feat_frontend = self.frontend(x)
+        bottle, _ = self.context(feat_frontend)
+        out = self.backend(bottle)
+        out = self.output_layer(out)
+        domain_logits = self.domain_classifier(feat_frontend, alpha)
+        return out, domain_logits
+
+class CANNet_GRL_Context(CANNet):
+    def __init__(self, load_weights=False, num_domains=12):
+        super(CANNet_GRL_Context, self).__init__(load_weights)
+        self.domain_classifier = DomainClassifier(in_channels=512, num_domains=num_domains)
+
+    def forward(self, x, alpha=1.0):
+        feat_frontend = self.frontend(x)
+        bottle, aggregated_feats = self.context(feat_frontend)
+        out = self.backend(bottle)
+        out = self.output_layer(out)
+        domain_logits = self.domain_classifier(aggregated_feats, alpha)
+        return out, domain_logits
+
+class CANNet_GRL_Concat(CANNet):
+    def __init__(self, load_weights=False, num_domains=12):
+        super(CANNet_GRL_Concat, self).__init__(load_weights)
+        self.domain_classifier = DomainClassifier(in_channels=512, num_domains=num_domains)
+
+    def forward(self, x, alpha=1.0):
+        feat_frontend = self.frontend(x)
+        bottle, _ = self.context(feat_frontend)
+        out = self.backend(bottle)
+        out = self.output_layer(out)
+        domain_logits = self.domain_classifier(bottle, alpha)
+        return out, domain_logits
+
 
 def make_layers(cfg, in_channels = 3,batch_norm=False,dilation = False):
     if dilation:
