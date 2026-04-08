@@ -3,3 +3,7 @@ __pycache__/
 .idea/
 *.pyc
 gwhd_2021/
+*.pth.tar
+test_architecture.py
+images/
+checkpoint.pth.tar

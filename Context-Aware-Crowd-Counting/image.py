@@ -11,11 +11,14 @@ def load_data(img_path,train = True):
     # Route to the correct ground truth folder based on existence
     train_gt = gt_path.replace('images', 'ground_truth/train')
     val_gt = gt_path.replace('images', 'ground_truth/val')
+    test_gt = gt_path.replace('images', 'ground_truth/test')
     
     if os.path.exists(train_gt):
         gt_path = train_gt
     elif os.path.exists(val_gt):
         gt_path = val_gt
+    elif os.path.exists(test_gt):
+        gt_path = test_gt
     else:
         gt_path = gt_path.replace('images', 'ground_truth') # Fallback
         
