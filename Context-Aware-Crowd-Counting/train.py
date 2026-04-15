@@ -34,16 +34,16 @@ parser.add_argument('--grl_location', type=str, default='none', choices=['none',
 parser.add_argument('--lambda_domain', type=float, default=0.1,
                     help='Weight for domain classification loss')
 
-def main():
 
-    global args,best_prec1
+def main():
+    global args, best_prec1
 
     best_prec1 = 1e6
 
     args = parser.parse_args()
     args.lr = 1e-4
-    args.decay         = 5*1e-4
-    args.start_epoch   = 0
+    args.decay = 5 * 1e-4
+    args.start_epoch = 0
     args.epochs = 1000
     args.workers = 8
     args.seed = int(time.time())
@@ -71,19 +71,19 @@ def main():
     criterion_domain = nn.CrossEntropyLoss().to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr,
-                                    weight_decay=args.decay)
+                                 weight_decay=args.decay)
 
     train_loader = torch.utils.data.DataLoader(
         dataset.listDataset(train_list,
-                       shuffle=True,
-                       transform=transforms.Compose([
-                       transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225]),
-                   ]),
-                       train=True,
-                       seen=model.seen,
-                       batch_size=args.batch_size,
-                       num_workers=args.workers),
+                            shuffle=True,
+                            transform=transforms.Compose([
+                                transforms.ToTensor(), transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                                                            std=[0.229, 0.224, 0.225]),
+                            ]),
+                            train=True,
+                            seen=model.seen,
+                            batch_size=args.batch_size,
+                            num_workers=args.workers),
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.workers,
@@ -92,11 +92,11 @@ def main():
 
     val_loader = torch.utils.data.DataLoader(
         dataset.listDataset(val_list,
-                       shuffle=False,
-                       transform=transforms.Compose([
-                           transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                         std=[0.229, 0.224, 0.225]),
-                       ]),  train=False),
+                            shuffle=False,
+                            transform=transforms.Compose([
+                                transforms.ToTensor(), transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                                                            std=[0.229, 0.224, 0.225]),
+                            ]), train=False),
         batch_size=1,
         shuffle=False,
         num_workers=args.workers,
@@ -111,7 +111,7 @@ def main():
 
         history['train_loss'].append(train_loss)
         history['val_mae'].append(prec1)
-        
+
         with open('training_history.json', 'w') as f:
             json.dump(history, f)
 
@@ -125,8 +125,8 @@ def main():
             'state_dict': model.state_dict(),
         }, is_best)
 
-def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
 
+def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
     losses = AverageMeter()
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -136,7 +136,7 @@ def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
     model.train()
     end = time.time()
 
-    for i,(img, target, country_id) in enumerate(train_loader):
+    for i, (img, target, country_id) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
         img = img.to(device)
@@ -146,15 +146,15 @@ def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
         if args.grl_location != 'none':
             p = float(i + epoch * len(train_loader)) / args.epochs / len(train_loader)
             alpha = 2. / (1. + np.exp(-10 * p)) - 1
-            
+
             output, domain_logits = model(img, alpha=alpha)
-            output = output[:,0,:,:]
-            
+            output = output[:, 0, :, :]
+
             loss_density = criterion(output, target)
             loss_domain = criterion_domain(domain_logits, country_id)
             loss = loss_density + args.lambda_domain * loss_domain
         else:
-            output = model(img)[:,0,:,:]
+            output = model(img)[:, 0, :, :]
             loss = criterion(output, target)
 
         losses.update(loss.item(), img.size(0))
@@ -170,51 +170,54 @@ def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  .format(
-                   epoch, i, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses))
+            .format(
+                epoch, i, len(train_loader), batch_time=batch_time,
+                data_time=data_time, loss=losses))
 
     return losses.avg
 
+
 def validate(val_loader, model, criterion):
-    print ('begin val')
+    print('begin val')
 
     model.eval()
 
     mae = 0
 
-    for i,(img, target, country_id) in enumerate(val_loader):
-        h,w = img.shape[2:4]
-        h_d = h//2
-        w_d = w//2
-        img_1 = img[:,:,:h_d,:w_d]
-        img_2 = img[:,:,:h_d,w_d:]
-        img_3 = img[:,:,h_d:,:w_d]
-        img_4 = img[:,:,h_d:,w_d:]
-        
+    for i, (img, target, country_id) in enumerate(val_loader):
+        h, w = img.shape[2:4]
+        h_d = h // 2
+        w_d = w // 2
+        img_1 = img[:, :, :h_d, :w_d]
+        img_2 = img[:, :, :h_d, w_d:]
+        img_3 = img[:, :, h_d:, :w_d]
+        img_4 = img[:, :, h_d:, w_d:]
+
         batch_img = torch.cat([img_1, img_2, img_3, img_4], dim=0).to(device)
-        
+
         if args.grl_location != 'none':
             batch_density, _ = model(batch_img, alpha=1.0)
             batch_density = batch_density.data.cpu().numpy()
         else:
             batch_density = model(batch_img).data.cpu().numpy()
-        
+
         pred_sum = batch_density.sum()
 
-        mae += abs(pred_sum-target.sum())
-        
+        mae += abs(pred_sum - target.sum())
+
         if i % 10 == 0 or i == len(val_loader) - 1:
             print('Validating: [{0}/{1}]\t Current MAE: {2:.3f}'.format(i, len(val_loader), mae / (i + 1)))
 
-    mae = mae/len(val_loader)
+    mae = mae / len(val_loader)
     print(' * MAE {mae:.3f} '
-              .format(mae=mae))
+          .format(mae=mae))
 
     return mae
 
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
 
@@ -229,6 +232,7 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
 
 if __name__ == '__main__':
     main()
