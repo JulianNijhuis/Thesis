@@ -18,6 +18,7 @@ import json
 import cv2
 import dataset
 import time
+import matplotlib.pyplot as plt
 
 device = torch.device("mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
 
@@ -27,7 +28,7 @@ parser.add_argument('train_json', metavar='TRAIN',
                     help='path to train json')
 parser.add_argument('val_json', metavar='VAL',
                     help='path to val json')
-parser.add_argument('--batch_size', type=int, default=4,
+parser.add_argument('--batch_size', type=int, default=8,
                     help='batch size for training')
 parser.add_argument('--grl_location', type=str, default='none', choices=['none', 'frontend', 'context', 'concat'],
                     help='Location for Gradient Reversal Layer')
@@ -44,7 +45,7 @@ def main():
     args.lr = 1e-4
     args.decay = 5 * 1e-4
     args.start_epoch = 0
-    args.epochs = 1000
+    args.epochs = 100
     args.workers = 8
     args.seed = int(time.time())
     args.print_freq = 4
@@ -125,6 +126,30 @@ def main():
             'state_dict': model.state_dict(),
         }, is_best)
 
+    # Plot learning curves at the end of training
+    plt.figure(figsize=(12, 5))
+    
+    plt.subplot(1, 2, 1)
+    plt.plot(range(1, len(history['train_loss']) + 1), history['train_loss'], label='Train Loss', marker='o', markersize=3)
+    plt.title('Training Loss Curve')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    
+    plt.subplot(1, 2, 2)
+    plt.plot(range(1, len(history['val_mae']) + 1), history['val_mae'], label='Validation MAE', color='orange', marker='o', markersize=3)
+    plt.title('Validation MAE Curve')
+    plt.xlabel('Epoch')
+    plt.ylabel('MAE')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.savefig('learning_curves.png', dpi=300)
+    print("Learning curves saved to 'learning_curves.png'")
+
+
 
 def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
     losses = AverageMeter()
@@ -203,7 +228,7 @@ def validate(val_loader, model, criterion):
 
         pred_sum = batch_density.sum()
 
-        mae += abs(pred_sum - target.sum())
+        mae += float(abs(pred_sum - target.sum().item()))
 
         if i % 10 == 0 or i == len(val_loader) - 1:
             print('Validating: [{0}/{1}]\t Current MAE: {2:.3f}'.format(i, len(val_loader), mae / (i + 1)))
