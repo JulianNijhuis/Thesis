@@ -32,8 +32,20 @@ parser.add_argument('--batch_size', type=int, default=8,
                     help='batch size for training')
 parser.add_argument('--grl_location', type=str, default='none', choices=['none', 'frontend', 'context', 'concat'],
                     help='Location for Gradient Reversal Layer')
-parser.add_argument('--lambda_domain', type=float, default=0.1,
+parser.add_argument('--lambda_domain', type=float, default=0.001,
                     help='Weight for domain classification loss')
+parser.add_argument('--epochs', type=int, default=100,
+                    help='number of epochs to train')
+parser.add_argument('--lr', type=float, default=1e-4,
+                    help='learning rate')
+parser.add_argument('--workers', type=int, default=12,
+                    help='number of data loading workers')
+parser.add_argument('--max_batches', type=int, default=-1,
+                    help='limit the number of batches to process for quick testing')
+parser.add_argument('--skip_val', action='store_true',
+                    help='skip validation loop')
+parser.add_argument('--exp_name', type=str, default='',
+                    help='Experiment name suffix for saving files')
 
 
 def main():
@@ -42,11 +54,8 @@ def main():
     best_prec1 = 1e6
 
     args = parser.parse_args()
-    args.lr = 1e-4
     args.decay = 5 * 1e-4
     args.start_epoch = 0
-    args.epochs = 100
-    args.workers = 8
     args.seed = int(time.time())
     args.print_freq = 4
     with open(args.train_json, 'r') as outfile:
@@ -104,55 +113,70 @@ def main():
         pin_memory=True,
         persistent_workers=True)
 
-    history = {'train_loss': [], 'val_mae': []}
+    history = {'val_mae': [], 'train_loss': [], 'val_loss': [], 'val_density_loss': [], 'val_domain_loss': []}
 
     for epoch in range(args.start_epoch, args.epochs):
-        train_loss = train(train_loader, model, criterion, criterion_domain, optimizer, epoch)
-        prec1 = validate(val_loader, model, criterion)
+        _, train_loss, train_domain_loss = train(train_loader, model, criterion, criterion_domain, optimizer, epoch)
+        
+        if not args.skip_val:
+            val_mae, val_rmse, val_density_loss, val_domain_loss = validate(val_loader, model, criterion, criterion_domain)
+        else:
+            val_mae, val_rmse, val_density_loss, val_domain_loss = 0, 0, 0, 0
 
+        history['val_mae'].append(val_mae)
         history['train_loss'].append(train_loss)
-        history['val_mae'].append(prec1)
+        history['val_loss'].append(val_density_loss + val_domain_loss)
+        history['val_density_loss'].append(val_density_loss)
+        history['val_domain_loss'].append(val_domain_loss)
 
-        with open('training_history.json', 'w') as f:
+        history_file = f'training_history_{args.exp_name}.json' if args.exp_name else 'training_history.json'
+        with open(history_file, 'w') as f:
             json.dump(history, f)
 
-        is_best = prec1 < best_prec1
-        best_prec1 = min(prec1, best_prec1)
+        is_best = val_mae < best_prec1
+        best_prec1 = min(val_mae, best_prec1)
         print(' * best MAE {mae:.3f} '
               .format(mae=best_prec1))
+        checkpoint_file = f'checkpoint_{args.exp_name}.pth.tar' if args.exp_name else 'checkpoint.pth.tar'
         save_checkpoint({
             'best_mae': best_prec1,
             'epoch': epoch,
             'state_dict': model.state_dict(),
-        }, is_best)
+        }, is_best, filename=checkpoint_file)
 
-    # Plot learning curves at the end of training
-    plt.figure(figsize=(12, 5))
-    
-    plt.subplot(1, 2, 1)
-    plt.plot(range(1, len(history['train_loss']) + 1), history['train_loss'], label='Train Loss', marker='o', markersize=3)
-    plt.title('Training Loss Curve')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.legend()
-    
-    plt.subplot(1, 2, 2)
-    plt.plot(range(1, len(history['val_mae']) + 1), history['val_mae'], label='Validation MAE', color='orange', marker='o', markersize=3)
-    plt.title('Validation MAE Curve')
-    plt.xlabel('Epoch')
-    plt.ylabel('MAE')
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.legend()
-    
-    plt.tight_layout()
-    plt.savefig('learning_curves.png', dpi=300)
-    print("Learning curves saved to 'learning_curves.png'")
+        # Plot learning curves midway through and at the end of training
+        plt.figure(figsize=(15, 5))
+        
+        plt.subplot(1, 2, 1)
+        plt.plot(range(1, len(history['train_loss']) + 1), history['train_loss'], label='Train Loss', marker='o', markersize=3)
+        plt.plot(range(1, len(history['val_loss']) + 1), history['val_loss'], label='Val Total Loss', color='green', marker='o', markersize=3)
+        plt.title('Train & Val Total Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.legend()
+        
+        plt.subplot(1, 2, 2)
+        plt.plot(range(1, len(history['val_density_loss']) + 1), history['val_density_loss'], label='Val Density Loss', color='purple', marker='o', markersize=3)
+        plt.plot(range(1, len(history['val_domain_loss']) + 1), history['val_domain_loss'], label='Val Domain Loss', color='orange', marker='o', markersize=3)
+        plt.title('Validation Loss Components')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.legend()
+        
+        plt.tight_layout()
+        curves_file = f'learning_curves_{args.exp_name}.png' if args.exp_name else 'learning_curves_updated.png'
+        plt.savefig(curves_file, dpi=300)
+        plt.close()
+        print(f"Learning curves saved to '{curves_file}'")
 
 
 
 def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
-    losses = AverageMeter()
+    losses_density = AverageMeter()
+    losses_domain = AverageMeter()
+    maes = AverageMeter()
     batch_time = AverageMeter()
     data_time = AverageMeter()
 
@@ -171,20 +195,33 @@ def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
         if args.grl_location != 'none':
             p = float(i + epoch * len(train_loader)) / args.epochs / len(train_loader)
             alpha = 2. / (1. + np.exp(-10 * p)) - 1
+            
+            # Combine alpha and lambda_domain so the GRL throttles the adversarial signal appropriately
+            combined_alpha = alpha * args.lambda_domain
 
-            output, domain_logits = model(img, alpha=alpha)
+            output, domain_logits = model(img, alpha=combined_alpha)
             output = output[:, 0, :, :]
 
             loss_density = criterion(output, target)
             loss_domain = criterion_domain(domain_logits, country_id)
-            loss = loss_density + args.lambda_domain * loss_domain
+            
+            loss = loss_density + loss_domain
+            losses_density.update(loss_density.item(), img.size(0))
+            losses_domain.update(loss_domain.item(), img.size(0))
         else:
             output = model(img)[:, 0, :, :]
-            loss = criterion(output, target)
+            loss_density = criterion(output, target)
+            loss_domain = torch.tensor(0.0).to(device)
+            loss = loss_density
+            losses_density.update(loss_density.item(), img.size(0))
+            losses_domain.update(0.0, img.size(0))
 
-        losses.update(loss.item(), img.size(0))
         optimizer.zero_grad()
         loss.backward()
+        
+        # Add gradient clipping to prevent adversarial collapse explosions
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
         optimizer.step()
 
         batch_time.update(time.time() - end)
@@ -194,50 +231,93 @@ def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
             print('Epoch: [{0}][{1}/{2}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                  'Loss Density {loss_density.val:.4f} ({loss_density.avg:.4f})\t'
+                  'Loss Domain {loss_domain.val:.4f} ({loss_domain.avg:.4f})\t'
             .format(
                 epoch, i, len(train_loader), batch_time=batch_time,
-                data_time=data_time, loss=losses))
+                data_time=data_time, loss_density=losses_density, loss_domain=losses_domain))
 
-    return losses.avg
+        if args.max_batches > 0 and i >= args.max_batches:
+            break
+
+    return maes.avg, losses_density.avg, losses_domain.avg
 
 
-def validate(val_loader, model, criterion):
+def validate(val_loader, model, criterion, criterion_domain):
     print('begin val')
 
     model.eval()
 
     mae = 0
+    rmse_sum = 0
+    losses_density = AverageMeter()
+    losses_domain = AverageMeter()
 
-    for i, (img, target, country_id) in enumerate(val_loader):
-        h, w = img.shape[2:4]
-        h_d = h // 2
-        w_d = w // 2
-        img_1 = img[:, :, :h_d, :w_d]
-        img_2 = img[:, :, :h_d, w_d:]
-        img_3 = img[:, :, h_d:, :w_d]
-        img_4 = img[:, :, h_d:, w_d:]
-
-        batch_img = torch.cat([img_1, img_2, img_3, img_4], dim=0).to(device)
-
-        if args.grl_location != 'none':
-            batch_density, _ = model(batch_img, alpha=1.0)
-            batch_density = batch_density.data.cpu().numpy()
-        else:
-            batch_density = model(batch_img).data.cpu().numpy()
-
-        pred_sum = batch_density.sum()
-
-        mae += float(abs(pred_sum - target.sum().item()))
-
-        if i % 10 == 0 or i == len(val_loader) - 1:
-            print('Validating: [{0}/{1}]\t Current MAE: {2:.3f}'.format(i, len(val_loader), mae / (i + 1)))
+    with torch.no_grad():
+        for i, (img, target, country_id) in enumerate(val_loader):
+            h, w = img.shape[2:4]
+            h_d = h // 2
+            w_d = w // 2
+            img_1 = img[:, :, :h_d, :w_d]
+            img_2 = img[:, :, :h_d, w_d:]
+            img_3 = img[:, :, h_d:, :w_d]
+            img_4 = img[:, :, h_d:, w_d:]
+    
+            batch_img = torch.cat([img_1, img_2, img_3, img_4], dim=0).to(device)
+    
+            if args.grl_location != 'none':
+                batch_density, domain_logits = model(batch_img, alpha=1.0)
+            else:
+                batch_density = model(batch_img)
+                domain_logits = None
+                
+            h_out_d = batch_density.shape[2]
+            w_out_d = batch_density.shape[3]
+            
+            pred_density = torch.zeros(1, h_out_d * 2, w_out_d * 2, device=device)
+            pred_density[0, :h_out_d, :w_out_d] = batch_density[0, 0]
+            pred_density[0, :h_out_d, w_out_d:] = batch_density[1, 0]
+            pred_density[0, h_out_d:, :w_out_d] = batch_density[2, 0]
+            pred_density[0, h_out_d:, w_out_d:] = batch_density[3, 0]
+            
+            target = target.type(torch.FloatTensor).to(device)
+        
+            if pred_density.shape[1:] != target.shape[1:]:
+                import torch.nn.functional as F
+                pred_density = F.interpolate(pred_density.unsqueeze(0), size=(target.shape[1], target.shape[2]), mode='bilinear', align_corners=False).squeeze(0)
+                ratio = (target.shape[1] * target.shape[2]) / (pred_density.shape[1] * pred_density.shape[2])
+                pred_density = pred_density * ratio
+            
+            loss_density = criterion(pred_density, target)
+            losses_density.update(loss_density.item(), 1)
+            
+            if domain_logits is not None:
+                expanded_country_id = country_id.to(device).repeat(4)
+                loss_domain = criterion_domain(domain_logits, expanded_country_id)
+                losses_domain.update(loss_domain.item(), 4)
+            else:
+                losses_domain.update(0.0, 4)
+            
+            batch_density_np = batch_density.data.cpu().numpy()
+            pred_sum = batch_density_np.sum()
+            target_sum = target.sum().item()
+            
+            err = pred_sum - target_sum
+    
+            mae += float(abs(err))
+            rmse_sum += float(err ** 2)
+    
+            if i % 10 == 0 or i == len(val_loader) - 1:
+                print('Validating: [{0}/{1}]\t Current MAE: {2:.3f}\t Density Loss: {3:.4f}\t Domain Loss: {4:.4f}'.format(
+                    i, len(val_loader), mae / (i + 1), losses_density.avg, losses_domain.avg))
 
     mae = mae / len(val_loader)
-    print(' * MAE {mae:.3f} '
-          .format(mae=mae))
+    rmse = np.sqrt(rmse_sum / len(val_loader))
+    
+    print(' * MAE {mae:.3f} * RMSE {rmse:.3f} * Density Loss {loss_dens:.4f} * Domain Loss {loss_dom:.4f} '
+          .format(mae=mae, rmse=rmse, loss_dens=losses_density.avg, loss_dom=losses_domain.avg))
 
-    return mae
+    return mae, rmse, losses_density.avg, losses_domain.avg
 
 
 class AverageMeter(object):

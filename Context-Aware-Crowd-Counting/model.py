@@ -18,13 +18,16 @@ class DomainClassifier(nn.Module):
     def __init__(self, in_channels, num_domains=12):
         super(DomainClassifier, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, 256, kernel_size=1)
+        self.bn1 = nn.BatchNorm2d(256)
         self.relu = nn.ReLU(inplace=True)
         self.gap = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Linear(256, num_domains)
 
     def forward(self, x, alpha):
         x = GradientReversalLayer.apply(x, alpha)
-        x = self.relu(self.conv1(x))
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
         x = self.gap(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
@@ -62,7 +65,7 @@ class ContextualModule(nn.Module):
             multi_scales.append(F.interpolate(input=stage_out, size=(h, w), mode='bilinear', align_corners=False))
             
         weights = [self.__make_weight(feats,scale_feature) for scale_feature in multi_scales]
-        aggregated_feats = (multi_scales[0]*weights[0]+multi_scales[1]*weights[1]+multi_scales[2]*weights[2]+multi_scales[3]*weights[3])/(weights[0]+weights[1]+weights[2]+weights[3])
+        aggregated_feats = (multi_scales[0]*weights[0]+multi_scales[1]*weights[1]+multi_scales[2]*weights[2]+multi_scales[3]*weights[3])/(weights[0]+weights[1]+weights[2]+weights[3] + 1e-8)
         overall_features = [aggregated_feats, feats]
         bottle = self.bottleneck(torch.cat(overall_features, 1))
         return self.relu(bottle), aggregated_feats

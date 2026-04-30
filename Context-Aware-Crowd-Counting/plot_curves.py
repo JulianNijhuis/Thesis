@@ -2,7 +2,7 @@ import json
 import matplotlib.pyplot as plt
 import os
 
-def plot_learning_curves(history_file='training_history.json', output_file='learning_curves.png'):
+def plot_learning_curves(history_file='training_historyL0.1GRLFrontEnd.json', output_file='learning_curvesl0.01Concat.png'):
     if not os.path.exists(history_file):
         print(f"Error: {history_file} not found.")
         return

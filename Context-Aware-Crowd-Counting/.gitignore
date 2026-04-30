@@ -7,3 +7,6 @@ gwhd_2021/
 test_architecture.py
 images/
 checkpoint.pth.tar
+*.sh
+test_json_writing.py
+*.tar
