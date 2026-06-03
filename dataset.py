@@ -8,7 +8,6 @@ from image import *
 import torchvision.transforms.functional as F
 import csv
 
-# Cache for domain mapping across dataset instantiations
 _img_to_country_id = None
 _num_domains = 12
 
