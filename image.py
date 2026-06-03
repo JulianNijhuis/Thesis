@@ -8,7 +8,6 @@ import cv2
 def load_data(img_path,train = True):
     gt_path = img_path.replace('.jpg','.h5').replace('.png', '.h5')
     
-    # Route to the correct ground truth folder based on existence
     train_gt = gt_path.replace('images', 'ground_truth/train')
     val_gt = gt_path.replace('images', 'ground_truth/val')
     test_gt = gt_path.replace('images', 'ground_truth/test')
