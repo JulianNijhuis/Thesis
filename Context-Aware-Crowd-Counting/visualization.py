@@ -30,25 +30,21 @@ def load_model(model_path, model_class, device):
 
 def main():
     print("==================================================")
-    print("Generating Thesis Visualizations (Baseline Branch Style)...")
+    print("Generating Visualizations")
     print("==================================================")
 
-    # Detect hardware
     device = torch.device("mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
     print(f"Using device: {device}")
 
-    # Load test set paths
     with open('path/to/test.json', 'r') as f:
         test_list = json.load(f)
 
-    # Load test csv for bounding box dots
     csv_path = 'path/to/test.csv'
     if not os.path.exists(csv_path):
         print(f"Error: test.csv not found at {csv_path}")
         return
     df = pd.read_csv(csv_path)
     
-    # Map image name to bounding boxes
     bbox_dict = {}
     for _, row in df.iterrows():
         bbox_dict[row['image_name']] = row['BoxesString']
@@ -58,7 +54,7 @@ def main():
     model_grl = load_model("path/to/model_best_grl.pth.tar", CANNet_GRL_Frontend, device)
     model_coral = load_model("path/to/model_best_coral.pth.tar", CANNet_CORAL_Frontend, device)
 
-    # Setup the data loader exactly like test.py on baseline branch
+    # Setup the data loader
     test_loader = torch.utils.data.DataLoader(
         dataset.listDataset(test_list,
                             shuffle=False,
@@ -129,17 +125,14 @@ def main():
                         cy = (ymin + ymax) / 2
                         centers.append((cx, cy))
             
-            # Ground truth count
             count_gt = len(centers) if len(centers) > 0 else float(target_map.sum())
 
-            # Un-normalize the image tensor for plotting, exactly like test.py on baseline branch
             img_np = img[0].cpu().numpy().transpose(1, 2, 0)
             mean = np.array([0.485, 0.456, 0.406])
             std = np.array([0.229, 0.224, 0.225])
             img_np = std * img_np + mean
             img_np = np.clip(img_np, 0, 1)
 
-            # Generate the beautiful 5-panel figure
             fig, axes = plt.subplots(1, 5, figsize=(25, 5))
             
             # Subplot 1: Original Image with Red Dots
@@ -150,8 +143,6 @@ def main():
                 axes[0].plot(cx, cy, 'ro', markersize=3)
             axes[0].set_title(f'Original (Annotated Count: {count_gt})', fontsize=12, fontweight='bold')
             axes[0].axis('off')
-
-            # We set a consistent, robust color limit matching model prediction peaks
             vmax = 0.03
 
             # Subplot 2: Ground Truth Density Map
@@ -187,11 +178,7 @@ def main():
             output_name = f'thesis_comparison_image_{i}.png'
             plt.savefig(output_name, dpi=300, bbox_inches='tight')
             plt.close()
-            print(f"Successfully saved multi-panel visualization to '{output_name}'")
-
-    print("\n==================================================")
-    print("All comparison visualizations generated successfully!")
-    print("==================================================")
+            print(f"Saved visualization to '{output_name}'")
 
 if __name__ == '__main__':
     main()

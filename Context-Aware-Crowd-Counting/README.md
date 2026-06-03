@@ -1,6 +1,6 @@
-# Context-Aware Crowd Counting with Domain Adaptation for Wheat Head Counting
+# Context-Aware Crowd Counting with Domain Generalization for Wheat Head Counting
 
-This repository is a PyTorch implementation for **Context-Aware Crowd Counting (CACC)** adapted to the **Global Wheat Head Detection (GWHD 2021)** dataset. It extends the baseline CACC architecture (originally introduced by Weizhe Liu et al. in CVPR 2019) with **Gradient Reversal Layer (GRL)** and **DeepCORAL** domain adaptation mechanisms to generalize wheat head counting across diverse country domains.
+This repository is a PyTorch implementation for **Context-Aware Crowd Counting (CACC)** adapted to the **Global Wheat Head Detection (GWHD 2021)** dataset. It extends the baseline CACC architecture (originally introduced by Weizhe Liu. in CVPR 2019) with **Gradient Reversal Layer (GRL)** and **DeepCORAL** domain generalization mechanisms to generalize wheat head counting across diverse country domains.
 
 To guarantee complete reproducibility and eliminate library version conflicts, the entire training, testing, and evaluation pipeline is fully dockerized.
 
@@ -11,7 +11,7 @@ To guarantee complete reproducibility and eliminate library version conflicts, t
 2. [Recommended Setup: Docker](#2-recommended-setup-docker)
 3. [Training Experiments inside Docker](#3-training-experiments-inside-docker)
 4. [Testing & Inference inside Docker](#4-testing--inference-inside-docker)
-5. [Reproducing Thesis Results & Visualizations](#5-reproducing-thesis-results--visualizations)
+5. [Visualizations](#5-visualizations)
 6. [Secondary Option: Manual Local Setup (Without Docker)](#secondary-option-manual-local-setup-without-docker)
 7. [Repository File Guide](#repository-file-guide)
 8. [Citations](#citations)
@@ -82,9 +82,9 @@ python create_json.py --h5_folder gwhd_2021/ground_truth/val --img_folder gwhd_2
 ```
 
 ### Step B: Train Model
-Choose the baseline or one of the domain adaptation configurations:
+Choose the baseline or one of the domain generalization configurations:
 
-#### Baseline CACC (No Domain Adaptation)
+#### Baseline CACC (No Domain Generalization)
 ```bash
 python train.py train.json val.json --algorithm none --epochs 100 --exp_name baseline
 ```
@@ -125,23 +125,13 @@ python test.py path/to/test.json \
 
 ---
 
-## 5. Reproducing Thesis Results & Visualizations
+## 5. Visualizations
 
-We provide automated scripts to evaluate models and recreate the charts and figures from the thesis paper:
-
-1. **Batch Evaluation**: Evaluates the baseline, GRL, and CORAL models on the test set and outputs `test_results.json`:
-   ```bash
-   python run_batch_tests.py
-   ```
-2. **Compile Results & Plots**: Parses validation histories and prints summary tables and convergence curves:
-   ```bash
-   python create_thesis_results.py
-   ```
-   *Generates `thesis_results_table.md`, `thesis_long_runs_comparison.png`, `thesis_grl_grid_search.png`, and `thesis_adaptation_convergence_5_epochs.png`*.
-3. **Compare Predictions & Annotations**: Generates side-by-side comparative visualizations comparing prediction maps against ground truth annotations:
-   ```bash
-   python generate_thesis_visualizations.py
-   ```
+Provided is a script to generate side-by-side comparative visual panels comparing: Original image (with annotation circles) | Ground-Truth Density Map | Baseline predictions | GRL predictions | DeepCORAL predictions:
+```bash
+python visualization.py
+```
+*Generates files named `thesis_comparison_image_*.png`.*
 
 ---
 

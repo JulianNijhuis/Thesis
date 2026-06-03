@@ -1,21 +1,37 @@
+# Virtual Environments & IDEs
 venv/
-__pycache__/
 .idea/
+
+# Python Cache
+__pycache__/
 *.pyc
-gwhd_2021/
-*.pth.tar
-test_architecture.py
-images/
-checkpoint.pth.tar
-*.sh
-test_json_writing.py
-*.tar
+
+# System Metadata Files
 .DS_Store
-test_result_*.png
-learning_curves_*.png
-training_history_*.json
+
+# Dataset & Data Lists
+gwhd_2021/
+test_json_writing.py
+
+# Model Checkpoints & Archives
+*.pth.tar
+*.tar
+
+# Helper Shell Scripts
+*.sh
+
+# Test & Debug Scripts
+test_architecture.py
+
+# Generated Training Logs & Metric Histories
 test_results.json
 training_history.json
+training_history_*.json
+
+# Generated Plots & Visualizations
+images/
+test_result_*.png
+learning_curves_*.png
 thesis_*.png
 thesis_results_table.md
 thesis_comparison_image_*.png
