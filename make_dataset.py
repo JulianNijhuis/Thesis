@@ -28,31 +28,24 @@ def generate_density_maps(csv_file, img_folder, output_folder):
             print(f"Warning: Failed to read image {img_name}. Error: {e}. Skipping.")
             continue
         
-        # Create a zero matrix of the same spatial dimensions as the image
         k = np.zeros((img.shape[0], img.shape[1]))
         
-        # Check if there are boxes (handle 'no_box' or NaN values)
         if pd.notna(boxes_string) and str(boxes_string).strip() != "no_box":
             boxes = str(boxes_string).split(';')
             for box in boxes:
                 if not box.strip():
                     continue
                     
-                # Format is typically "xmin ymin xmax ymax"
                 xmin, ymin, xmax, ymax = map(float, box.strip().split(' '))
                 
-                # Calculate center point of the wheat head
                 cx = int((xmin + xmax) / 2)
                 cy = int((ymin + ymax) / 2)
                 
-                # Set the center point to 1 (making sure it's inside image bounds)
                 if cy < img.shape[0] and cx < img.shape[1]:
                     k[cy, cx] = 1
                     
-        # Apply Gaussian filter to blur the points into a density map
         k = gaussian_filter(k, 15)
         
-        # Save to hdf5 file
         h5_name = img_name.rsplit('.', 1)[0] + '.h5'
         h5_path = os.path.join(output_folder, h5_name)
         
