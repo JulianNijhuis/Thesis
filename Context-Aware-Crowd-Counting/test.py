@@ -10,7 +10,7 @@ import numpy as np
 
 parser = argparse.ArgumentParser(description='Test the best CANNet model on a dataset')
 parser.add_argument('test_json', metavar='TEST', help='path to test json file')
-parser.add_argument('--model_path', type=str, default='model_best.pthGRlFrontEnd.tar', help='path to saved model checkpoint')
+parser.add_argument('--model_path', type=str, default='path/to/model_best.pth.tar', help='path to saved model checkpoint')
 parser.add_argument('--batch_size', type=int, default=1, help='batch size for testing')
 parser.add_argument('--grl_location', type=str, default='none', choices=['none', 'frontend', 'context', 'concat'], help='Location for Gradient Reversal Layer')
 

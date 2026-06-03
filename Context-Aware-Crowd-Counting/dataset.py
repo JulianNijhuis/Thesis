@@ -18,7 +18,7 @@ def _load_domain_data():
         return _img_to_country_id, _num_domains
         
     _img_to_country_id = {}
-    base_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'gwhd_2021')
+    base_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'path_to_gwhd_2021_here')
     metadata_path = os.path.join(base_dir, 'metadata.csv')
     
     if not os.path.exists(metadata_path):

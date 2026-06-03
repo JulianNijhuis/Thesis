@@ -38,11 +38,11 @@ def main():
     print(f"Using device: {device}")
 
     # Load test set paths
-    with open('gwhd_2021/test.json', 'r') as f:
+    with open('path/to/test.json', 'r') as f:
         test_list = json.load(f)
 
     # Load test csv for bounding box dots
-    csv_path = 'gwhd_2021/test.csv'
+    csv_path = 'path/to/test.csv'
     if not os.path.exists(csv_path):
         print(f"Error: test.csv not found at {csv_path}")
         return
@@ -54,9 +54,9 @@ def main():
         bbox_dict[row['image_name']] = row['BoxesString']
 
     # Load the three core models
-    model_baseline = load_model("model_best.pth.tar", CANNet, device)
-    model_grl = load_model("model_best_grl_frontend_fixed.pth.tar", CANNet_GRL_Frontend, device)
-    model_coral = load_model("model_best_coralfrontend.pth.tar", CANNet_CORAL_Frontend, device)
+    model_baseline = load_model("path/to/model_best.pth.tar", CANNet, device)
+    model_grl = load_model("path/to/model_best_grl.pth.tar", CANNet_GRL_Frontend, device)
+    model_coral = load_model("path/to/model_best_coral.pth.tar", CANNet_CORAL_Frontend, device)
 
     # Setup the data loader exactly like test.py on baseline branch
     test_loader = torch.utils.data.DataLoader(

@@ -52,6 +52,7 @@ parser.add_argument('--exp_name', type=str, default='',
                     help='Experiment name suffix for saving files')
 
 
+# Main orchestrator: parses command line flags, initializes model, sets up datasets/loaders, and runs training/validation loops
 def main():
     global args, best_prec1
 
@@ -185,6 +186,7 @@ def main():
         plt.close()
         print(f"Learning curves saved to '{curves_file}'")
 
+# Computes CORAL loss by finding the Frobenius norm distance between covariance matrices of source and target features
 def calc_coral_loss(source, target):
     d = source.size(1)
     # source covariance
@@ -201,6 +203,7 @@ def calc_coral_loss(source, target):
 
 
 
+# Trains the model for a single epoch: handles forward pass, backpropagation, and weight optimization for density/domain losses
 def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
     losses_density = AverageMeter()
     losses_domain = AverageMeter()
@@ -298,6 +301,7 @@ def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
     return maes.avg, losses_density.avg, losses_domain.avg
 
 
+# Evaluates the model performance on the validation set, splitting inputs into quadrants to match crop training size
 def validate(val_loader, model, criterion, criterion_domain):
     print('begin val')
 
@@ -381,15 +385,18 @@ def validate(val_loader, model, criterion, criterion_domain):
 class AverageMeter(object):
     """Computes and stores the average and current value"""
 
+    # Initializes the tracker by resetting current, sum, count, and average statistics
     def __init__(self):
         self.reset()
 
+    # Resets all running tracking metrics to zero
     def reset(self):
         self.val = 0
         self.avg = 0
         self.sum = 0
         self.count = 0
 
+    # Accumulates a new data point, updates count, sum, and computes the new average
     def update(self, val, n=1):
         self.val = val
         self.sum += val * n
