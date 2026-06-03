@@ -27,7 +27,7 @@ The dataset can be downloaded from Zenodo:
 Download the images zip and the annotations/metadata CSV files.
 
 ### B. Directory Structure
-Create a dataset folder (e.g. `gwhd_2021`) and extract the dataset so it follows this layout:
+Copy the exact `gwhd_2021` folder (obtained by unzipping the downloaded dataset files) directly into the root of this repository so it follows this layout:
 ```text
 gwhd_2021/
 ├── metadata.csv        # Maps sub-domains to countries
@@ -53,11 +53,9 @@ docker build -t crowd-counting .
 ```
 
 ### Step B: Start the Container
-Start the container while mounting your local dataset directory (`gwhd_2021`) to the container's workspace to keep the image lightweight and avoid copying dataset files:
+Start the container while mounting your current directory (`$(pwd)`) to the container's `/workspace`. This mounts both your code and the dataset folder (`gwhd_2021/`), and ensures any checkpoints, logs, or plots generated inside the container are saved directly back to your local machine:
 ```bash
-docker run --gpus all -it \
-  -v /absolute/path/to/gwhd_2021:/workspace/gwhd_2021 \
-  crowd-counting
+docker run --gpus all -it --rm -v $(pwd):/workspace crowd-counting
 ```
 *(If you are running on a CPU-only host or Apple Silicon without NVIDIA GPUs, you can omit the `--gpus all` flag).*
 
