@@ -23,7 +23,6 @@ def plot_learning_curves(history_file='path/to/training_history.json', output_fi
 
     plt.figure(figsize=(12, 5))
 
-    # Training Loss Curve
     plt.subplot(1, 2, 1)
     plt.plot(epochs_train, history['train_loss'], label='Train Loss', color='blue', marker='o', markersize=3)
     plt.title('Training Loss Curve')
@@ -32,7 +31,6 @@ def plot_learning_curves(history_file='path/to/training_history.json', output_fi
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend()
 
-    # Validation MAE Curve
     plt.subplot(1, 2, 2)
     plt.plot(epochs_val, history['val_mae'], label='Validation MAE', color='orange', marker='o', markersize=3)
     plt.title('Validation MAE Curve')
