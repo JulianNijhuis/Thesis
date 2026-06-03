@@ -1,0 +1,17 @@
+{
+    "baseline": {
+        "name": "Baseline CACC",
+        "mae": 17.202877670526505,
+        "rmse": 21.665320603241984
+    },
+    "grl_frontend": {
+        "name": "GRL Frontend",
+        "mae": 17.50170737671852,
+        "rmse": 23.993161489114694
+    },
+    "coral_frontend": {
+        "name": "DeepCORAL Frontend",
+        "mae": 81.32843119072915,
+        "rmse": 89.69256985365509
+    }
+}

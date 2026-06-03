@@ -3,7 +3,7 @@ import os
 
 import warnings
 
-from model import CANNet, CANNet_GRL_Frontend, CANNet_GRL_Context, CANNet_GRL_Concat
+from model import CANNet, CANNet_GRL_Frontend, CANNet_GRL_Context, CANNet_GRL_Concat, CANNet_CORAL_Frontend, CANNet_CORAL_Context, CANNet_CORAL_Concat
 
 from utils import save_checkpoint
 
@@ -30,9 +30,13 @@ parser.add_argument('val_json', metavar='VAL',
                     help='path to val json')
 parser.add_argument('--batch_size', type=int, default=8,
                     help='batch size for training')
+parser.add_argument('--algorithm', type=str, default='grl', choices=['grl', 'coral', 'none'],
+                    help='Domain generalization algorithm to use')
 parser.add_argument('--grl_location', type=str, default='none', choices=['none', 'frontend', 'context', 'concat'],
                     help='Location for Gradient Reversal Layer')
-parser.add_argument('--lambda_domain', type=float, default=0.001,
+parser.add_argument('--coral_location', type=str, default='none', choices=['none', 'frontend', 'context', 'concat'],
+                    help='Location for CORAL feature extraction')
+parser.add_argument('--lambda_domain', type=float, default=0.0001,
                     help='Weight for domain classification loss')
 parser.add_argument('--epochs', type=int, default=100,
                     help='number of epochs to train')
@@ -66,14 +70,24 @@ def main():
     torch.manual_seed(args.seed)
     print(f"Training on device: {device}")
 
-    if args.grl_location == 'frontend':
-        model = CANNet_GRL_Frontend()
-    elif args.grl_location == 'context':
-        model = CANNet_GRL_Context()
-    elif args.grl_location == 'concat':
-        model = CANNet_GRL_Concat()
+    if args.algorithm == 'coral':
+        if args.coral_location == 'frontend':
+            model = CANNet_CORAL_Frontend()
+        elif args.coral_location == 'context':
+            model = CANNet_CORAL_Context()
+        elif args.coral_location == 'concat':
+            model = CANNet_CORAL_Concat()
+        else:
+            model = CANNet()
     else:
-        model = CANNet()
+        if args.grl_location == 'frontend':
+            model = CANNet_GRL_Frontend()
+        elif args.grl_location == 'context':
+            model = CANNet_GRL_Context()
+        elif args.grl_location == 'concat':
+            model = CANNet_GRL_Concat()
+        else:
+            model = CANNet()
 
     model = model.to(device)
 
@@ -171,6 +185,20 @@ def main():
         plt.close()
         print(f"Learning curves saved to '{curves_file}'")
 
+def calc_coral_loss(source, target):
+    d = source.size(1)
+    # source covariance
+    xm = torch.mean(source, 0, keepdim=True) - source
+    xc = xm.t() @ xm / (source.size(0) - 1 + 1e-8)
+    
+    # target covariance
+    xmt = torch.mean(target, 0, keepdim=True) - target
+    xct = xmt.t() @ xmt / (target.size(0) - 1 + 1e-8)
+    
+    # frobenius norm
+    loss = torch.mean((xc - xct)**2)
+    return loss
+
 
 
 def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
@@ -192,12 +220,38 @@ def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
         target = target.type(torch.FloatTensor).to(device)
         country_id = country_id.to(device)
 
-        if args.grl_location != 'none':
+        if args.algorithm == 'coral' and args.coral_location != 'none':
+            output, features = model(img)
+            output = output[:, 0, :, :]
+
+            loss_density = criterion(output, target)
+            
+            unique_domains = torch.unique(country_id)
+            coral_l = 0.0
+            pairs = 0
+            
+            for d_i in range(len(unique_domains)):
+                for d_j in range(d_i + 1, len(unique_domains)):
+                    f_i = features[country_id == unique_domains[d_i]]
+                    f_j = features[country_id == unique_domains[d_j]]
+                    if f_i.size(0) > 1 and f_j.size(0) > 1:
+                        coral_l += calc_coral_loss(f_i, f_j)
+                        pairs += 1
+            
+            if pairs > 0:
+                loss_domain = (coral_l / pairs) * args.lambda_domain
+            else:
+                loss_domain = torch.tensor(0.0, device=device, requires_grad=True)
+                
+            loss = loss_density + loss_domain
+            losses_density.update(loss_density.item(), img.size(0))
+            losses_domain.update(loss_domain.item() if isinstance(loss_domain, torch.Tensor) else loss_domain, img.size(0))
+
+        elif args.grl_location != 'none':
             p = float(i + epoch * len(train_loader)) / args.epochs / len(train_loader)
             alpha = 2. / (1. + np.exp(-10 * p)) - 1
             
-            # Combine alpha and lambda_domain so the GRL throttles the adversarial signal appropriately
-            combined_alpha = alpha * args.lambda_domain
+            combined_alpha = alpha
 
             output, domain_logits = model(img, alpha=combined_alpha)
             output = output[:, 0, :, :]
@@ -205,9 +259,10 @@ def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
             loss_density = criterion(output, target)
             loss_domain = criterion_domain(domain_logits, country_id)
             
-            loss = loss_density + loss_domain
+            weighted_domain_loss = args.lambda_domain * loss_domain
+            loss = loss_density + weighted_domain_loss
             losses_density.update(loss_density.item(), img.size(0))
-            losses_domain.update(loss_domain.item(), img.size(0))
+            losses_domain.update(weighted_domain_loss.item(), img.size(0))
         else:
             output = model(img)[:, 0, :, :]
             loss_density = criterion(output, target)
@@ -265,7 +320,10 @@ def validate(val_loader, model, criterion, criterion_domain):
     
             batch_img = torch.cat([img_1, img_2, img_3, img_4], dim=0).to(device)
     
-            if args.grl_location != 'none':
+            if args.algorithm == 'coral' and args.coral_location != 'none':
+                batch_density, _ = model(batch_img, alpha=1.0)
+                domain_logits = None
+            elif args.grl_location != 'none':
                 batch_density, domain_logits = model(batch_img, alpha=1.0)
             else:
                 batch_density = model(batch_img)
@@ -294,7 +352,7 @@ def validate(val_loader, model, criterion, criterion_domain):
             if domain_logits is not None:
                 expanded_country_id = country_id.to(device).repeat(4)
                 loss_domain = criterion_domain(domain_logits, expanded_country_id)
-                losses_domain.update(loss_domain.item(), 4)
+                losses_domain.update((args.lambda_domain * loss_domain).item(), 4)
             else:
                 losses_domain.update(0.0, 4)
             

@@ -144,6 +144,45 @@ class CANNet_GRL_Concat(CANNet):
         domain_logits = self.domain_classifier(bottle, alpha)
         return out, domain_logits
 
+class CANNet_CORAL_Frontend(CANNet):
+    def __init__(self, load_weights=False):
+        super(CANNet_CORAL_Frontend, self).__init__(load_weights)
+        self.gap = nn.AdaptiveAvgPool2d(1)
+
+    def forward(self, x, alpha=1.0):
+        feat_frontend = self.frontend(x)
+        bottle, _ = self.context(feat_frontend)
+        out = self.backend(bottle)
+        out = self.output_layer(out)
+        features = self.gap(feat_frontend).view(feat_frontend.size(0), -1)
+        return out, features
+
+class CANNet_CORAL_Context(CANNet):
+    def __init__(self, load_weights=False):
+        super(CANNet_CORAL_Context, self).__init__(load_weights)
+        self.gap = nn.AdaptiveAvgPool2d(1)
+
+    def forward(self, x, alpha=1.0):
+        feat_frontend = self.frontend(x)
+        bottle, aggregated_feats = self.context(feat_frontend)
+        out = self.backend(bottle)
+        out = self.output_layer(out)
+        features = self.gap(aggregated_feats).view(aggregated_feats.size(0), -1)
+        return out, features
+
+class CANNet_CORAL_Concat(CANNet):
+    def __init__(self, load_weights=False):
+        super(CANNet_CORAL_Concat, self).__init__(load_weights)
+        self.gap = nn.AdaptiveAvgPool2d(1)
+
+    def forward(self, x, alpha=1.0):
+        feat_frontend = self.frontend(x)
+        bottle, _ = self.context(feat_frontend)
+        out = self.backend(bottle)
+        out = self.output_layer(out)
+        features = self.gap(bottle).view(bottle.size(0), -1)
+        return out, features
+
 
 def make_layers(cfg, in_channels = 3,batch_norm=False,dilation = False):
     if dilation:
