@@ -183,18 +183,14 @@ def main():
         plt.close()
         print(f"Learning curves saved to '{curves_file}'")
 
-# Computes CORAL loss by finding the Frobenius norm distance between covariance matrices of source and target features
 def calc_coral_loss(source, target):
     d = source.size(1)
-    # source covariance
     xm = torch.mean(source, 0, keepdim=True) - source
     xc = xm.t() @ xm / (source.size(0) - 1 + 1e-8)
     
-    # target covariance
     xmt = torch.mean(target, 0, keepdim=True) - target
     xct = xmt.t() @ xmt / (target.size(0) - 1 + 1e-8)
     
-    # frobenius norm
     loss = torch.mean((xc - xct)**2)
     return loss
 
@@ -272,8 +268,7 @@ def train(train_loader, model, criterion, criterion_domain, optimizer, epoch):
 
         optimizer.zero_grad()
         loss.backward()
-        
-        # Add gradient clipping to prevent adversarial collapse explosions
+      
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         
         optimizer.step()
