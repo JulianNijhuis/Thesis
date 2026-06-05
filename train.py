@@ -51,8 +51,6 @@ parser.add_argument('--skip_val', action='store_true',
 parser.add_argument('--exp_name', type=str, default='',
                     help='Experiment name suffix for saving files')
 
-
-# Main orchestrator: parses command line flags, initializes model, sets up datasets/loaders, and runs training/validation loops
 def main():
     global args, best_prec1
 
@@ -159,7 +157,6 @@ def main():
             'state_dict': model.state_dict(),
         }, is_best, filename=checkpoint_file)
 
-        # Plot learning curves midway through and at the end of training
         plt.figure(figsize=(15, 5))
         
         plt.subplot(1, 2, 1)
