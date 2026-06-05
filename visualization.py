@@ -80,7 +80,6 @@ def main():
             img = img.to(device)
             target = target.type(torch.FloatTensor).to(device)
 
-            # --- Forward Pass: Baseline CACC (Full Image Single Pass) ---
             if model_baseline:
                 d_baseline = model_baseline(img)
                 pred_baseline = d_baseline[0, 0].cpu().numpy()
@@ -89,7 +88,6 @@ def main():
                 pred_baseline = None
                 count_baseline = 0.0
 
-            # --- Forward Pass: GRL Frontend (Full Image Single Pass) ---
             if model_grl:
                 res_grl = model_grl(img, alpha=1.0)
                 d_grl = res_grl[0] if isinstance(res_grl, tuple) else res_grl
@@ -99,7 +97,6 @@ def main():
                 pred_grl = None
                 count_grl = 0.0
 
-            # --- Forward Pass: CORAL Frontend (Full Image Single Pass) ---
             if model_coral:
                 res_coral = model_coral(img)
                 d_coral = res_coral[0] if isinstance(res_coral, tuple) else res_coral
@@ -109,10 +106,8 @@ def main():
                 pred_coral = None
                 count_coral = 0.0
 
-            # Extract ground-truth density map from data loader
             target_map = target[0].cpu().numpy()
 
-            # Retrieve bounding box centers for dots
             centers = []
             boxes_str = bbox_dict.get(filename, '')
             if pd.notna(boxes_str) and str(boxes_str).strip() != "no_box" and str(boxes_str).strip() != "":
@@ -135,7 +130,6 @@ def main():
 
             fig, axes = plt.subplots(1, 5, figsize=(25, 5))
             
-            # Subplot 1: Original Image with Red Dots
             axes[0].imshow(img_np)
             for cx, cy in centers:
                 circle = patches.Circle((cx, cy), radius=10, edgecolor='red', facecolor='none', linewidth=1.5)
@@ -145,12 +139,10 @@ def main():
             axes[0].axis('off')
             vmax = 0.03
 
-            # Subplot 2: Ground Truth Density Map
             axes[1].imshow(target_map, cmap='jet', vmin=0, vmax=vmax)
             axes[1].set_title(f'Ground Truth Density Map', fontsize=12, fontweight='bold')
             axes[1].axis('off')
 
-            # Subplot 3: Baseline Prediction
             if pred_baseline is not None:
                 axes[2].imshow(pred_baseline, cmap='jet', vmin=0, vmax=vmax)
                 axes[2].set_title(f'Baseline CACC (Count: {count_baseline:.1f})', fontsize=12, fontweight='bold')
@@ -158,7 +150,6 @@ def main():
                 axes[2].text(0.5, 0.5, 'Model Missing', ha='center', va='center')
             axes[2].axis('off')
 
-            # Subplot 4: GRL Frontend Prediction
             if pred_grl is not None:
                 axes[3].imshow(pred_grl, cmap='jet', vmin=0, vmax=vmax)
                 axes[3].set_title(f'GRL Frontend (Count: {count_grl:.1f})', fontsize=12, fontweight='bold')
@@ -166,7 +157,6 @@ def main():
                 axes[3].text(0.5, 0.5, 'Model Missing', ha='center', va='center')
             axes[3].axis('off')
 
-            # Subplot 5: DeepCORAL Frontend Prediction
             if pred_coral is not None:
                 axes[4].imshow(pred_coral, cmap='jet', vmin=0, vmax=vmax)
                 axes[4].set_title(f'DeepCORAL Frontend (Count: {count_coral:.1f})', fontsize=12, fontweight='bold')
