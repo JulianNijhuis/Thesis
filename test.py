@@ -72,8 +72,6 @@ def main():
             img = img.to(device)
             target = target.type(torch.FloatTensor).to(device)
 
-            # The Contextual Module is scale-dependent, so we MUST split into quadrants
-            # to match the training crop size, otherwise the spatial pyramid produces noise.
             h, w = img.shape[2:4]
             h_d = h // 2
             w_d = w // 2
